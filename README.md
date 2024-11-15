@@ -1,4 +1,4 @@
-# CppJieba [English](README_EN.md)
+# CppJieba
 
 [![CMake](https://github.com/yanyiwu/cppjieba/actions/workflows/cmake.yml/badge.svg)](https://github.com/yanyiwu/cppjieba/actions/workflows/cmake.yml)
 [![Author](https://img.shields.io/badge/author-@yanyiwu-blue.svg?style=flat)](http://yanyiwu.com/) 
@@ -30,7 +30,7 @@ CppJieba是"结巴(Jieba)"中文分词的C++版本
 ### 下载和编译
 
 ```sh
-git clone --depth=10 --branch=master git://github.com/yanyiwu/cppjieba.git
+git clone --depth=10 --branch=master https://github.com/yanyiwu/cppjieba.git
 cd cppjieba
 git submodule init
 git submodule update
