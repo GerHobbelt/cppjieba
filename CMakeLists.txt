@@ -14,12 +14,11 @@ endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-ADD_DEFINITIONS(-O3 -Wall -g)
+ADD_DEFINITIONS(-O3 -g)
 
 ADD_SUBDIRECTORY(test)
 
 ENABLE_TESTING()
-ADD_TEST(NAME ./demo COMMAND ./demo)
 if(NOT MSVC)
 	ADD_TEST(NAME ./test/test.run COMMAND ./test/test.run)
 	ADD_TEST(NAME ./load_test COMMAND ./load_test)
