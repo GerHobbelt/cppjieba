@@ -33,6 +33,24 @@ TEST(MixSegmentTest, Test1) {
   }
 
   {
+    // Digit+letter combinations should be kept together, matching Python jieba behavior
+    sentence = "5G网络速度快";
+    expected = "5G/网络/速度/快";
+    segment.Cut(sentence, words);
+    actual = Join(words.begin(), words.end(), "/");
+    ASSERT_EQ(actual, expected);
+  }
+
+  {
+    // Decimal number followed by letters: decimal and letters remain separate
+    sentence = "3.5KG重量";
+    expected = "3.5/KG/重量";
+    segment.Cut(sentence, words);
+    actual = Join(words.begin(), words.end(), "/");
+    ASSERT_EQ(actual, expected);
+  }
+
+  {
     sentence = "他来到了网易杭研大厦";
     expected = "他/来到/了/网易/杭/研/大厦";
     segment.Cut(sentence, words, false);
@@ -185,6 +203,45 @@ TEST(HMMSegmentTest, Test1) {
   }
 }
 
+TEST(HMMSegmentTest, AlphanumericCombinations) {
+  // Tests for digit+letter and letter+decimal combinations to align with
+  // Python jieba finalseg behavior: re_skip = "[a-zA-Z0-9]+(?:\.\d+)?"
+  HMMSegment segment(DICT_DIR "/hmm_model.utf8");
+  vector<string> words;
+
+  {
+    // digit followed by letter (no decimal) should stay together
+    const char* str = "5G";
+    const char* res[] = {"5G"};
+    segment.Cut(str, words);
+    ASSERT_EQ(words, vector<string>(res, res + sizeof(res)/sizeof(res[0])));
+  }
+
+  {
+    // digit followed by letter then Chinese
+    const char* str = "3D打印";
+    const char* res[] = {"3D", "打印"};
+    segment.Cut(str, words);
+    ASSERT_EQ(words, vector<string>(res, res + sizeof(res)/sizeof(res[0])));
+  }
+
+  {
+    // decimal number followed by letters: decimal and letters are separate
+    const char* str = "3.5KG";
+    const char* res[] = {"3.5", "KG"};
+    segment.Cut(str, words);
+    ASSERT_EQ(words, vector<string>(res, res + sizeof(res)/sizeof(res[0])));
+  }
+
+  {
+    // letter followed by digit followed by decimal
+    const char* str = "v1.2";
+    const char* res[] = {"v1.2"};
+    segment.Cut(str, words);
+    ASSERT_EQ(words, vector<string>(res, res + sizeof(res)/sizeof(res[0])));
+  }
+}
+
 TEST(FullSegment, Test1) {
   FullSegment segment(TEST_DATA_DIR "/extra_dict/jieba.dict.small.utf8");
   vector<string> words;
@@ -198,6 +255,14 @@ TEST(FullSegment, Test1) {
   segment.Cut("上市公司CEO", words);
   s << words;
   ASSERT_EQ(s, "[\"上市\", \"公司\", \"C\", \"E\", \"O\"]");
+}
+
+TEST(FullSegment, NullDictUnitDoesNotSkipFollowingRune) {
+  FullSegment segment(DICT_DIR "/jieba.dict.utf8");
+  vector<string> words;
+
+  segment.Cut("崎岖的牙齿", words);
+  ASSERT_EQ("崎岖/的/牙齿", Join(words.begin(), words.end(), "/"));
 }
 
 TEST(QuerySegment, Test1) {
@@ -258,4 +323,42 @@ TEST(MPSegmentTest, Unicode32) {
   segment.Cut(s, words);
 
   ASSERT_EQ(Join(words.begin(), words.end(), "/"), "天气/很/好/，/🙋/ /我们/去/郊游/。");
+}
+
+// Regression test for heap corruption ("corrupted size vs. prev_size") with
+// input strings larger than 2114 bytes. The bug was caused by using
+// LocalVector<RuneStr> (only safe for primitive types) for RuneStrArray.
+TEST(MixSegmentTest, LongInput) {
+  // 2114 is the byte length threshold beyond which the original heap
+  // corruption was triggered when RuneStrArray used LocalVector<RuneStr>.
+  const size_t HEAP_CORRUPTION_THRESHOLD = 2114;
+
+  MixSegment segment(DICT_DIR "/jieba.dict.utf8", DICT_DIR "/hmm_model.utf8");
+  vector<string> words;
+
+  // Test with a long Chinese string (> HEAP_CORRUPTION_THRESHOLD bytes)
+  string phrase = "我来到北京清华大学进行学习和研究工作，非常愉快，让我有了很大的收获。";
+  string long_chinese;
+  while (long_chinese.size() < HEAP_CORRUPTION_THRESHOLD + 1000) {
+    long_chinese += phrase;
+  }
+  ASSERT_GT(long_chinese.size(), HEAP_CORRUPTION_THRESHOLD);
+  segment.Cut(long_chinese, words);
+  ASSERT_GT(words.size(), size_t(0));
+
+  // Test with a long ASCII string (> HEAP_CORRUPTION_THRESHOLD bytes)
+  string long_ascii(HEAP_CORRUPTION_THRESHOLD + 1000, 'a');
+  words.clear();
+  segment.Cut(long_ascii, words);
+  ASSERT_GT(words.size(), size_t(0));
+
+  // Test with a very long string (> 6000 bytes)
+  string very_long_chinese;
+  while (very_long_chinese.size() < 6000) {
+    very_long_chinese += phrase;
+  }
+  ASSERT_GT(very_long_chinese.size(), size_t(6000));
+  words.clear();
+  segment.Cut(very_long_chinese, words);
+  ASSERT_GT(words.size(), size_t(0));
 }
